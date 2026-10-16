@@ -1,0 +1,9 @@
+# Entorno virtual
+env_finanzas/
+__pycache__/
+
+# Variables de entorno (Token)
+.env
+
+# Base de datos local
+gastos.db

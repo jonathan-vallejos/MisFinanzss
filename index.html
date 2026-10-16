@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard Financiero</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            background-color: #1c1e21;
+            font-family: 'Inter', sans-serif;
+            color: #e0e0e0;
+        }
+        .card {
+            background-color: #25282c;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            box-shadow: 0 4px 30px rgba(0, 0, 0, 0.5);
+        }
+        .glow {
+            box-shadow: 0 0 15px rgba(255, 255, 255, 0.05);
+        }
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: #1c1e21; }
+        ::-webkit-scrollbar-thumb { background: #444; border-radius: 4px; }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col">
+    <header class="w-full p-6 border-b border-gray-800 bg-[#1c1e21] relative overflow-hidden">
+        <div class="max-w-5xl mx-auto relative z-10 flex justify-between items-center">
+            <h1 class="text-3xl font-light tracking-tight text-gray-200 uppercase border-l-4 border-gray-600 pl-4">Finanzas Personales</h1>
+            <div class="text-sm text-gray-500 font-mono">Sistema en línea</div>
+        </div>
+        <div class="absolute top-0 left-0 w-full h-full opacity-10 pointer-events-none bg-[url('https://www.transparenttextures.com/patterns/concrete-wall.png')]"></div>
+    </header>
+
+    <main class="flex-grow p-6 max-w-5xl mx-auto w-full space-y-6 relative">
+        <section class="card glow rounded-xl p-8 mb-8 transition-all duration-300 hover:border-gray-600">
+            <div class="flex flex-col md:flex-row justify-between items-center text-center md:text-left">
+                <div>
+                    <h2 class="text-sm font-sans text-gray-400 uppercase tracking-widest mb-1">Gasto Total Acumulado</h2>
+                    <div id="total-display" class="text-5xl font-light text-gray-100">Calculando...</div>
+                </div>
+                <div class="mt-4 md:mt-0 flex gap-2">
+                    <span class="px-3 py-1 rounded-full border border-red-900/50 text-red-400 bg-red-900/10 text-xs font-medium">Activo</span>
+                </div>
+            </div>
+        </section>
+
+        <section class="card glow rounded-xl overflow-hidden">
+            <div class="p-6 border-b border-gray-800 flex justify-between items-center bg-[#1f2226] rounded-t-xl">
+                <h3 class="text-lg font-light text-gray-300 uppercase tracking-wider">Registro de Movimientos</h3>
+                <div class="text-xs text-gray-500">Ordenado por fecha reciente</div>
+            </div>
+            
+            <div class="overflow-x-auto">
+                <table class="w-full text-left border-collapse">
+                    <thead>
+                        <tr class="text-xs uppercase tracking-wider text-gray-500 border-b border-gray-800 bg-[#1f2226]">
+                            <th class="p-4 font-medium w-3/12">Fecha</th>
+                            <th class="p-4 font-medium w-6/12">Descripción / Categoría</th>
+                            <th class="p-4 font-medium w-4/12 text-right">Monto</th>
+                        </tr>
+                    </thead>
+                    <tbody id="gastos-body" class="text-gray-300 font-light bg-[#25282c]">
+                        <!-- Filas inyectadas vía JS -->
+                    </tbody>
+                </table>
+            </div>
+            
+            <div id="no-data-msg" class="p-8 text-center text-gray-600 italic hidden">
+                No hay registros recientes de gastos.
+            </div>
+        </section>
+    </main>
+
+    <script>
+        const API_URL = 'http://127.0.0.1:8000/gastos';
+        
+        function formatCurrency(amount) {
+            const num = parseFloat(amount);
+            if (isNaN(num)) return '$ 0,00';
+            return new Intl.NumberFormat('es-AR', { style: 'decimal', minimumFractionDigits: 2 }).format(num);
+        }
+
+        async function fetchGastos() {
+            try {
+                const response = await fetch(API_URL);
+                if (!response.ok) throw new Error(`Error HTTP: ${response.status}`);
+                
+                const data = await response.json();
+                
+                let totalSum = 0;
+                const tbody = document.getElementById('gastos-body');
+                const noDataMsg = document.getElementById('no-data-msg');
+                const totalDisplay = document.getElementById('total-display');
+
+                tbody.innerHTML = '';
+
+                if (!data || data.length === 0) {
+                    noDataMsg.classList.remove('hidden');
+                    totalDisplay.innerText = formatCurrency(0);
+                    return;
+                }
+
+                data.forEach(item => {
+                    const montoStr = item.monto || item['monto'] || 0;
+                    const description = (item.categoria || item.descripcion || 'Sin descripción').trim();
+                    let dateRaw = item.fecha || item.fechanulla || new Date().toISOString();
+                    
+                    if (dateRaw instanceof Date) dateRaw = dateRaw.toISOString(); 
+
+                    let displayDate = '';
+                    try {
+                         const parsed = new Date(dateRaw);
+                         if (!isNaN(parsed.getTime())) {
+                             displayDate = parsed.toLocaleDateString('es-AR', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }).toUpperCase().replace('.', ',');
+                         } else {
+                             displayDate = dateRaw; 
+                         }
+                    } catch (e) {
+                        displayDate = 'Fecha Inválida';
+                    }
+
+                    totalSum += parseFloat(montoStr);
+
+                    const tr = document.createElement('tr');
+                    tr.className = 'border-b border-gray-800/50 transition-colors hover:bg-white/5 group last:border-0';
+                    
+                    tr.addEventListener('mouseenter', () => tr.classList.add('text-gray-200'));
+                    tr.addEventListener('mouseleave', () => tr.classList.remove('text-gray-200'));
+
+                    tr.innerHTML = `
+                        <td class="p-4 text-gray-400 font-mono text-xs">${displayDate}</td>
+                        <td class="p-4 max-w-md truncate text-gray-300 group-hover:text-white transition-colors duration-200">${description}</td>
+                        <td class="p-4 text-right font-mono text-red-400">- $ ${formatCurrency(montoStr)}</td>
+                    `;
+                    tbody.appendChild(tr);
+                });
+
+                totalDisplay.innerText = `$ ${formatCurrency(totalSum)}`;
+                totalDisplay.classList.add('text-red-400');
+            } catch (error) {
+                console.error('Error cargando gastos:', error);
+                document.getElementById('total-display').innerText = 'Error de conexión';
+            }
+        }
+
+        document.addEventListener('DOMContentLoaded', fetchGastos);
+    </script>
+</body>
+</html>

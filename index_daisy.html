@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="es" data-theme="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard Financiero</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- DaisyUI CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/daisyui@4.10.2/dist/full.min.css" rel="stylesheet" type="text/css" />
+</head>
+<body class="min-h-screen bg-base-200">
+
+    <!-- Navbar -->
+    <div class="navbar bg-base-100 shadow-lg mb-8">
+        <div class="flex-1">
+            <a class="btn btn-ghost text-xl">Mis Finanzas</a>
+        </div>
+        <div class="flex-none">
+            <ul class="menu menu-horizontal px-1">
+                <li>
+                    <details>
+                        <summary>Cambiar Tema</summary>
+                        <ul class="p-2 bg-base-100 rounded-t-none z-10 right-0 w-40" id="theme-selector">
+                            <li><a data-set-theme="dark">Oscuro (Dark)</a></li>
+                            <li><a data-set-theme="light">Claro (Light)</a></li>
+                            <li><a data-set-theme="dim">Industrial (Dim)</a></li>
+                            <li><a data-set-theme="cyberpunk">Cyberpunk</a></li>
+                            <li><a data-set-theme="retro">Retro</a></li>
+                            <li><a data-set-theme="synthwave">Synthwave</a></li>
+                            <li><a data-set-theme="cupcake">Cupcake</a></li>
+                        </ul>
+                    </details>
+                </li>
+            </ul>
+        </div>
+    </div>
+
+    <main class="max-w-5xl mx-auto p-4 space-y-6">
+        
+        <!-- Tarjeta de Gasto Total -->
+        <div class="card bg-primary text-primary-content shadow-xl">
+            <div class="card-body">
+                <h2 class="card-title text-sm uppercase opacity-80">Gasto Total Acumulado</h2>
+                <div id="total-display" class="text-5xl font-bold">Calculando...</div>
+            </div>
+        </div>
+
+        <!-- Tabla de Movimientos -->
+        <div class="card bg-base-100 shadow-xl">
+            <div class="card-body">
+                <h2 class="card-title mb-4 border-b border-base-300 pb-2">Registro de Movimientos</h2>
+                
+                <div class="overflow-x-auto">
+                    <table class="table table-zebra w-full">
+                        <thead>
+                            <tr>
+                                <th>Fecha</th>
+                                <th>Descripción / Categoría</th>
+                                <th class="text-right">Monto</th>
+                            </tr>
+                        </thead>
+                        <tbody id="gastos-body">
+                            <!-- Filas inyectadas vía JS -->
+                        </tbody>
+                    </table>
+                </div>
+                
+                <div id="no-data-msg" class="text-center py-8 opacity-50 hidden">
+                    No hay registros recientes de gastos.
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <script>
+        // Lógica para cambiar temas de DaisyUI
+        document.querySelectorAll('#theme-selector a').forEach(item => {
+            item.addEventListener('click', event => {
+                const theme = event.target.getAttribute('data-set-theme');
+                document.documentElement.setAttribute('data-theme', theme);
+                // Cerramos el menú desplegable al hacer clic
+                event.target.closest('details').removeAttribute('open');
+            });
+        });
+
+        const API_URL = 'http://127.0.0.1:8000/gastos';
+        
+        function formatCurrency(amount) {
+            const num = parseFloat(amount);
+            if (isNaN(num)) return '$ 0,00';
+            return new Intl.NumberFormat('es-AR', { style: 'decimal', minimumFractionDigits: 2 }).format(num);
+        }
+
+        async function fetchGastos() {
+            try {
+                const response = await fetch(API_URL);
+                if (!response.ok) throw new Error(`Error HTTP: ${response.status}`);
+                
+                const data = await response.json();
+                
+                let totalSum = 0;
+                const tbody = document.getElementById('gastos-body');
+                const noDataMsg = document.getElementById('no-data-msg');
+                const totalDisplay = document.getElementById('total-display');
+
+                tbody.innerHTML = '';
+
+                if (!data || data.length === 0) {
+                    noDataMsg.classList.remove('hidden');
+                    totalDisplay.innerText = formatCurrency(0);
+                    return;
+                }
+
+                data.forEach(item => {
+                    const montoStr = item.monto || item['monto'] || 0;
+                    const description = (item.categoria || item.descripcion || 'Sin descripción').trim();
+                    let dateRaw = item.fecha || item.fechanulla || new Date().toISOString();
+                    
+                    if (dateRaw instanceof Date) dateRaw = dateRaw.toISOString(); 
+
+                    let displayDate = '';
+                    try {
+                         const parsed = new Date(dateRaw);
+                         if (!isNaN(parsed.getTime())) {
+                             displayDate = parsed.toLocaleDateString('es-AR', { weekday: 'short', year: 'numeric', month: 'short', day: 'numeric' }).toUpperCase().replace('.', '');
+                         } else {
+                             displayDate = dateRaw; 
+                         }
+                    } catch (e) {
+                        displayDate = 'Fecha Inválida';
+                    }
+
+                    totalSum += parseFloat(montoStr);
+
+                    const tr = document.createElement('tr');
+                    tr.innerHTML = `
+                        <td class="text-xs opacity-70">${displayDate}</td>
+                        <td class="font-medium capitalize">${description}</td>
+                        <td class="text-right text-error font-bold">- $ ${formatCurrency(montoStr)}</td>
+                    `;
+                    tbody.appendChild(tr);
+                });
+
+                totalDisplay.innerText = `$ ${formatCurrency(totalSum)}`;
+            } catch (error) {
+                console.error('Error cargando gastos:', error);
+                document.getElementById('total-display').innerText = 'Error de API';
+            }
+        }
+
+        document.addEventListener('DOMContentLoaded', fetchGastos);
+    </script>
+</body>
+</html>
