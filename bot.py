@@ -2,7 +2,7 @@ import os
 import re
 import sqlite3
 from telegram import Update
-from telegram.ext import Application, MessageHandler, filters, ContextTypes
+from telegram.ext import Application, MessageHandler, CommandHandler, filters, ContextTypes
 from dotenv import load_dotenv
 
 def inicializar_db():
@@ -63,6 +63,20 @@ def obtener_categoria(descripcion: str):
     return "Otros"
 # -------------------------------------------------
 
+def borrar_ultimo_gasto():
+    conn = sqlite3.connect('gastos.db')
+    cursor = conn.cursor()
+    cursor.execute('DELETE FROM gastos WHERE id = (SELECT MAX(id) FROM gastos)')
+    rows_deleted = cursor.rowcount
+    conn.close()
+    return rows_deleted > 0
+
+async def comando_deshacer(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    if borrar_ultimo_gasto():
+        await update.message.reply_text('✅ Se borró el último gasto registrado.')
+    else:
+        await update.message.reply_text('⚠️ No hay gastos que deshacer. La lista de gastos está vacía.')
+
 async def procesar_gasto(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     texto = update.message.text
     data = extraer_datos(texto)
@@ -100,6 +114,7 @@ def main() -> None:
 
     application = Application.builder().token(TOKEN).build()
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, procesar_gasto))
+    application.add_handler(CommandHandler('deshacer', comando_deshacer))
     application.run_polling()
 
 if __name__ == '__main__':
